@@ -40,6 +40,8 @@
 @end
 
 @implementation Stop
+
+#pragma mark - Mantle
 + (Class)modelClass {
     return CDStop.class;
 }
@@ -57,6 +59,8 @@
     return [NSValueTransformer mtl_JSONDictionaryTransformerWithModelClass:Venue.class];
 }
 
+#pragma mark - Equality and comparisons
+
 - (BOOL)isSameLocationAs:(Stop *)stop {
     CLLocationDistance distance = [self distanceFromCoordinate:stop.coordinate];
 
@@ -72,12 +76,23 @@
     return [thisLocation distanceFromLocation:thatLocation];
 }
 
+#pragma mark - Equality
+- (BOOL)isEqual:(Stop *)object {
+    if (![object isKindOfClass:Stop.class]) { return NO; }
+    return [self.startTime isEqualToDate:object.startTime] &&
+        [self.endTime isEqualToDate:object.endTime];
+}
+
+- (NSUInteger)hash {
+    return self.startTime.hash ^ self.endTime.hash;
+}
+
 #pragma mark - Setup
-//- (void)setupWithVisit:(CLVisit *)visit {
-//    self.startTime = visit.arrivalDate;
-//    self.endTime = visit.departureDate;
-//    self.coordinate = visit.coordinate;
-//}
+- (void)setupWithVisit:(CLVisit *)visit {
+    self.startTime = visit.arrivalDate;
+    self.endTime = visit.departureDate;
+    self.coordinate = visit.coordinate;
+}
 
 #pragma mark - Core Data Attributes
 - (void)setCoordinate:(CLLocationCoordinate2D)coordinate {

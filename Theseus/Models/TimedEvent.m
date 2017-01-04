@@ -71,6 +71,7 @@
 
 - (id)initWithContext:(NSManagedObjectContext *)context {
     if (!(self = [super init])) return nil;
+
     self.context = context;
     self.model = [self.class.modelClass MR_createInContext:context];
     return self;
@@ -172,6 +173,10 @@
         return [[self alloc] initWithCDModel:obj
                                    context:context];
     });
+}
+
++ (instancetype)MR_findWithStartTime:(NSDate *)date {
+    return [self.modelClass MR_findFirstByAttribute:@"startDate" withValue:date];
 }
 
 - (BOOL) MR_deleteInContext:(NSManagedObjectContext *)context {

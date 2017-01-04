@@ -38,6 +38,8 @@ NSString * const DayStepsChangedKey = @"steps";
 
 @interface Day ()
 @property (nonatomic, strong) NSArray *data;
+@property (nonatomic, strong) NSArray *stops;
+@property (nonatomic, strong) NSArray *movement;
 @property (nonatomic, readwrite) NSDate *date;
 @property (nonatomic, readwrite, assign) NSInteger steps;
 
@@ -48,6 +50,14 @@ NSString * const DayStepsChangedKey = @"steps";
 
 @implementation Day
 
++ (NSDateFormatter *)dateFormatter {
+    NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
+    dateFormatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
+    dateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss'Z'";
+    return dateFormatter;
+}
+
+#pragma mark Mantle
 + (NSDictionary *)JSONKeyPathsByPropertyKey {
     return @{@"daysAgo": NSNull.null};
 }
@@ -64,12 +74,7 @@ NSString * const DayStepsChangedKey = @"steps";
     }];
 }
 
-+ (NSDateFormatter *)dateFormatter {
-    NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
-    dateFormatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
-    dateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss'Z'";
-    return dateFormatter;
-}
+#pragma mark - Lifecycle
 
 - (id)init {
     @throw @"Use initWithDaysAgo";
@@ -98,8 +103,31 @@ NSString * const DayStepsChangedKey = @"steps";
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
+#pragma mark - Data fetching
 - (void)fetchStops {
-    self.data = [self.locationManager stopsForDate:self.date];
+    self.stops = [self.locationManager stopsForDate:self.date];
+
+    if (self.stops.count == 0) {
+        self.data = self.stops;
+        return;
+    }
+
+    NSMutableArray *movement = [[NSMutableArray alloc] init];
+    for (int i = 0; i < self.stops.count - 1; i++) {
+        Stop *first = self.stops[i];
+        Stop *second = self.stops[i+1];
+
+        Path *path = [[Path alloc] init];
+        path.startTime = first.endTime;
+        path.endTime = second.startTime;
+
+        [movement addObject:path];
+    }
+    self.movement = movement;
+
+    NSArray *allData = [self.stops arrayByAddingObjectsFromArray:self.movement];
+    NSSortDescriptor *sort = [NSSortDescriptor sortDescriptorWithKey:@"startTime" ascending:YES];
+    self.data = [allData sortedArrayUsingDescriptors:@[sort]];
 }
 
 - (void)fetchSteps {
@@ -113,19 +141,7 @@ NSString * const DayStepsChangedKey = @"steps";
     }
 }
 
-
-- (NSArray *)paths {
-    return ASTFilter(self.data, ^BOOL(TimedEvent *obj) {
-        return [obj isKindOfClass:Path.class];
-    });
-}
-
-- (NSArray *)stops {
-    return ASTFilter(self.data, ^BOOL(TimedEvent *obj) {
-        return [obj isKindOfClass:Stop.class];
-    });
-}
-
+#pragma mark - Accessors
 - (NSString *)jsonRepresentation {
     NSDictionary *dict = [MTLJSONAdapter JSONDictionaryFromModel:self];
     NSError *error;
@@ -133,7 +149,7 @@ NSString * const DayStepsChangedKey = @"steps";
     NSData *jsonData;
     if ([NSJSONSerialization isValidJSONObject:dict]) {
         jsonData = [NSJSONSerialization dataWithJSONObject:dict
-                                                       options:NSJSONWritingPrettyPrinted // Pass 0 if you don't care about the readability of the generated string
+                                                       options:NSJSONWritingPrettyPrinted
                                                          error:&error];
     }
 
@@ -165,34 +181,5 @@ NSString * const DayStepsChangedKey = @"steps";
         return nil;
     }
 }
-
-- (MKCoordinateRegion)region {
-    // TODO: This can be made more elegant by exending Asterism's `ASTFlatten` method to operate on NSSets.
-    NSArray *locationSets = [self.paths valueForKeyPath:@"locations"];
-    NSMutableArray *pathLocations = [NSMutableArray new];
-    for (NSSet *set in locationSets) {
-        [pathLocations addObjectsFromArray:set.allObjects];
-    }
-
-    NSArray *locations = [pathLocations arrayByAddingObjectsFromArray:self.stops];
-
-    CLLocationCoordinate2D center = CLLocationCoordinate2DMake([[locations valueForKeyPath:@"@avg.latitude"] doubleValue], [[locations valueForKeyPath:@"@avg.longitude"] doubleValue]);
-
-
-    CLLocationDegrees minLat = [[locations valueForKeyPath:@"@min.latitude"] doubleValue];
-    CLLocationDegrees maxLat = [[locations valueForKeyPath:@"@max.latitude"] doubleValue];
-    CLLocation *location1 = [[CLLocation alloc] initWithLatitude:minLat longitude:0];
-    CLLocation *location2 = [[CLLocation alloc] initWithLatitude:maxLat longitude:0];
-    CLLocationDistance latitudeDelta = [location1 distanceFromLocation:location2];
-
-    CLLocationDegrees minLong = [[locations valueForKeyPath:@"@min.longitude"] doubleValue];
-    CLLocationDegrees maxLong = [[locations valueForKeyPath:@"@max.longitude"] doubleValue];
-    location1 = [[CLLocation alloc] initWithLatitude:0 longitude:minLong];
-    location2 = [[CLLocation alloc] initWithLatitude:0 longitude:maxLong];
-    CLLocationDistance longitudeDelta = [location1 distanceFromLocation:location2];
-
-    return MKCoordinateRegionMakeWithDistance(center, latitudeDelta, longitudeDelta);
-}
-
 
 @end

@@ -43,6 +43,9 @@
     [self setupAppearance];
     [self setupDropbox];
 
+    UIUserNotificationSettings *notificationSettings = [UIUserNotificationSettings settingsForTypes:UIUserNotificationTypeAlert|UIUserNotificationTypeSound categories:nil];
+    [application registerUserNotificationSettings:notificationSettings];
+
     UIPageViewController *dayPages = [[UIPageViewController alloc] initWithTransitionStyle:UIPageViewControllerTransitionStyleScroll
                                                                      navigationOrientation:UIPageViewControllerNavigationOrientationHorizontal
                                                                                    options:nil];
@@ -62,7 +65,7 @@
 
 - (void)applicationDidBecomeActive:(UIApplication *)application
 {
-    [self.stepManager startMonitoring];
+    [self startMonitoring];
 }
 
 #pragma mark - Private

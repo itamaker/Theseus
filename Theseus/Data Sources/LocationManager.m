@@ -21,6 +21,7 @@
 #import "LocationManager.h"
 #import "RawLocation.h"
 #import "Stop.h"
+#import "Day.h"
 
 @import CoreLocation;
 
@@ -48,36 +49,45 @@
 
     NSPredicate *day = [NSPredicate predicateWithFormat:@"(startTime > %@) AND (endTime < %@)", startOfDay, endOfDay];
 
-    return [Stop MR_findAllSortedBy:@"startTime" ascending:YES withPredicate:day];
+    // TODO: This removes duplicate dates at access-time.
+    // Ideally this would happen at insertion time, but it currently appears to
+    // take too long for a background CLLocationManager process.
+    NSArray *stops = [Stop MR_findAllSortedBy:@"startTime" ascending:YES withPredicate:day];
+    NSArray *filtered = [[NSSet setWithArray:stops] allObjects];
+
+    NSSortDescriptor *sort = [NSSortDescriptor sortDescriptorWithKey:@"startTime" ascending:YES];
+    return [filtered sortedArrayUsingDescriptors:@[sort]];
 }
 
 #pragma mark - Monitoring
 - (void)startMonitoring {
     if (![CLLocationManager locationServicesEnabled]) return;
 
-//    if ([self.manager respondsToSelector:@selector(startMonitoringVisits)]) {
-//        [self.manager requestAlwaysAuthorization];
-//        [self.manager startUpdatingLocation];
-//        [self.manager startMonitoringVisits];
-//    }
+    if ([self.manager respondsToSelector:@selector(startMonitoringVisits)]) {
+        [self.manager requestAlwaysAuthorization];
+        [self.manager startUpdatingLocation];
+        [self.manager startMonitoringVisits];
+    }
 }
 
 - (void)stopMonitoring {
-//    if ([self.manager respondsToSelector:@selector(stopMonitoringVisits)]) {
-//        [self.manager stopUpdatingLocation];
-//        [self.manager stopMonitoringVisits];
-//    }
+    if ([self.manager respondsToSelector:@selector(stopMonitoringVisits)]) {
+        [self.manager stopUpdatingLocation];
+        [self.manager stopMonitoringVisits];
+    }
 }
 
 #pragma mark - CLLocationManagerDelegate
-//- (void)locationManager:(CLLocationManager *)manager didVisit:(CLVisit *)visit {
-//    [MagicalRecord saveWithBlock:^(NSManagedObjectContext *localContext) {
-//        Stop *stop = [[Stop alloc] initWithContext:localContext];
-//        [stop setupWithVisit:visit];
-//        [[NSNotificationCenter defaultCenter] postNotificationName:TheseusDidProcessNewDataLocation object:self];
-//    }];
-//}
+- (void)locationManager:(CLLocationManager *)manager didVisit:(CLVisit *)visit {
+    if (visit.arrivalDate == NSDate.distantPast || visit.departureDate == NSDate.distantFuture) {
+        return;
+    }
 
+    [MagicalRecord saveWithBlock:^(NSManagedObjectContext *localContext) {
+        Stop *stop = [[Stop alloc] initWithContext:localContext];
+        [stop setupWithVisit:visit];
+    }];
+}
 - (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray *)locations {
     [MagicalRecord saveWithBlock:^(NSManagedObjectContext *localContext) {
         for (CLLocation *location in locations) {
